@@ -1,11 +1,12 @@
 import discord
 from discord.ext import commands
-from discord.ext.commands import bot
-import asyncio
 import logging
+import gtssetupfiles
 import json
+import sqlite3
 
-with open("./token.json", "r") as bot_token_file:
+gtssetupfiles.checktokenfile()
+with open("token.json", "r") as bot_token_file:
     bot_token_json = json.loads(bot_token_file.read())
     bot_token = bot_token_json["botToken"]
 
@@ -17,6 +18,7 @@ handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(me
 logger.addHandler(handler)
 
 sleepingbot = commands.Bot("s!")
+
 
 @sleepingbot.event
 async def on_ready():
