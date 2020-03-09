@@ -25,7 +25,7 @@ async def on_ready():
     print("Loading up...")
     print("My name is " + sleepingbot.user.name)
     print("My ID is " + str(sleepingbot.user.id))
-    print("Roll out, autobots")
+    print("Autobots, roll out")
     await sleepingbot.change_presence(activity=discord.Game("Oh god I'm alive"))
 
 
