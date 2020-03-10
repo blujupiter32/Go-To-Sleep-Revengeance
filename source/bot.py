@@ -9,6 +9,7 @@ gtssetupfiles.checktokenfile()
 with open("token.json", "r") as bot_token_file:
     bot_token_json = json.loads(bot_token_file.read())
     bot_token = bot_token_json["botToken"]
+    google_token = bot_token_json["googleToken"]
 
 
 logger = logging.getLogger("discord")
