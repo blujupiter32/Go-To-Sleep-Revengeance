@@ -53,17 +53,26 @@ async def register(ctx):
     if message != "":
         location_geocode = gmaps.geocode(address=message)
         latlong = location_geocode[0]["geometry"]["location"]
+        name = ""
         for address in location_geocode[0]["address_components"]:   # Finds the most generic but still useful form of the address given
             if address["types"] == ["administrative_area_level_1", "political"]:
                 name = address["long_name"]
+            # Gets the country name as a last resort if a lower-level region cannot be found
+            if address["types"] == ["country", "political"]:
+                if name == "":
+                    name = address["long_name"]
         # If this name is not already in the cache:
         cached_location = sleepycursor.execute("SELECT * FROM area_cache WHERE area_name = ?", (name,)).fetchone()
         if cached_location is None:
             area_id = await newlocation(name, latlong, ctx)
         else:
             area_id = cached_location[0]
-        sleepycursor.execute("""INSERT INTO sleep_tracker(user_id, area_id)
-                             VALUES (?,?)""", (ctx.author.id, area_id))
+        # If user is not already in the database
+        if sleepycursor.execute("SELECT user_id FROM sleep_tracker WHERE user_id = ?", (ctx.author.id,)) is None:
+            sleepycursor.execute("""INSERT INTO sleep_tracker(user_id, area_id)
+                                VALUES (?,?)""", (ctx.author.id, area_id))
+        else:
+            sleepycursor.execute("UPDATE sleep_tracker SET area_id=? WHERE user_id = ?", (area_id, ctx.author.id))
         sleepydb.commit()
         await ctx.send("You are now registered at "+name)
 
