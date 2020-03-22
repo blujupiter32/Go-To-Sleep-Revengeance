@@ -95,4 +95,9 @@ async def newlocation(name, latlong, ctx):
     return area_id[0]
 
 
+@sleepingbot.command(pass_context=True)
+async def aboutme(ctx):
+    await ctx.send('''Hey! I'm the descendant of an older bot, just called "Go To Sleep", and trust me you don't want to see that
+My source is at https://github.com/Lewis-Trowbridge/Go-To-Sleep-Revengeance in case you wanted to know more about me.''')
+
 sleepingbot.run(bot_token)
