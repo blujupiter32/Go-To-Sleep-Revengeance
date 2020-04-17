@@ -5,6 +5,10 @@ import gtssetupfiles
 import json
 import sqlite3
 import googlemaps
+import ntplib
+import time
+from asyncio import sleep as async_sleep
+import random
 
 gtssetupfiles.checktokenfile()      # Check token file and database to make sure they are in good form
 gtssetupfiles.checkdatabase()
@@ -14,6 +18,8 @@ with open("token.json", "r") as bot_token_file:     # Open token file and read t
     google_token = bot_token_json["googleToken"]
 
 gmaps = googlemaps.Client(google_token)
+ntpclient = ntplib.NTPClient()
+ntpserver = "ntp.plus.net"
 
 sleepydb = sqlite3.connect("../sleepy.db")
 sleepycursor = sleepydb.cursor()
@@ -95,9 +101,47 @@ async def newlocation(name, latlong, ctx):
     return area_id[0]
 
 
+async def align_to_hour():
+    ntpresponse = ntpclient.request(ntpserver, version=3)
+    ntptime = time.localtime(ntpresponse.tx_time)
+    offsetfromnexthour = ((60 - ntptime.tm_min) - (ntptime.tm_sec / 60)) * 60
+    await async_sleep(offsetfromnexthour)
+
+
+async def refreshtimezoneoffset():
+    await sleepingbot.wait_until_ready()
+    aligning = False
+    while aligning is True:
+        await align_to_hour()
+        aligning = False
+    while aligning is False:
+        for timezone in sleepycursor.execute("""SELECT timezones.timezone_id, ac.latitude, ac.longitude FROM timezones
+                JOIN area_cache ac on timezones.timezone_id = ac.timezone_id""").fetchall():
+            latlong = {"lat": timezone[1], "lng": timezone[2]}
+            new_time = gmaps.timezone(latlong)
+            sleepycursor.execute("""UPDATE timezones SET utc_offset=?, dst_offset=? WHERE timezone_id=?""",
+                             (new_time["rawOffset"], new_time["dstOffset"], timezone[0]))
+        sleepydb.commit()
+        timetosleep = random.randrange(129, 200)
+        await async_sleep(timetosleep)
+
+@sleepingbot.command(pass_context=True)
+async def testntp(ctx):
+    ntpresponse = ntpclient.request("ntp.plus.net", version=3)
+    ntptime = time.localtime(ntpresponse.tx_time)
+    offsetfromnexthour = ((60 - ntptime.tm_min) - (ntptime.tm_sec/60)) * 60
+    await ctx.send("Going into hibernation...")
+    await async_sleep(offsetfromnexthour)
+    ntpresponse = ntpclient.request("ntp.plus.net", version=3)
+    ntptime = time.ctime(ntpresponse.tx_time)
+    await ctx.send(ntptime)
+    await ctx.send("I bet you didn't see me coming!")
+
+
 @sleepingbot.command(pass_context=True)
 async def aboutme(ctx):
     await ctx.send('''Hey! I'm the descendant of an older bot, just called "Go To Sleep", and trust me you don't want to see that
 My source is at https://github.com/Lewis-Trowbridge/Go-To-Sleep-Revengeance in case you wanted to know more about me.''')
 
+sleepingbot.loop.create_task(refreshtimezoneoffset())
 sleepingbot.run(bot_token)
