@@ -12,7 +12,9 @@ def checkdatabase():
         cursor.execute("""CREATE TABLE sleep_tracker (
             user_id INTEGER PRIMARY KEY,
             area_id INTEGER,
-            FOREIGN KEY (area_id) REFERENCES area_cache(area_id)
+            server_id INTEGER,
+            FOREIGN KEY (area_id) REFERENCES area_cache(area_id),
+            FOREIGN KEY (server_id) REFERENCES server_linked_channels(server_id)
             );""")
 
         cursor.execute("""CREATE TABLE timezones (
@@ -30,5 +32,11 @@ def checkdatabase():
             timezone_id TEXT,
             FOREIGN KEY (timezone_id) REFERENCES timezones(timezone_id)
             );""")
+
+        cursor.execute("""CREATE TABLE server_linked_channels (
+        server_id INTEGER,
+        channel_id INTEGER,
+        PRIMARY KEY (server_id, channel_id)
+        );""")
 
         sleepydb.commit()

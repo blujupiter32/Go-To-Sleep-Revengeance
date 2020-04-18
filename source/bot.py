@@ -53,6 +53,17 @@ async def sleep(ctx):
 
 
 @sleepingbot.command(pass_context=True)
+async def link(ctx):
+    # If this channel is not registered
+    if sleepycursor.execute("SELECT * FROM server_linked_channels WHERE server_id=?", (ctx.message.guild.id,)).fetchone() is None:
+        sleepycursor.execute("INSERT INTO server_linked_channels(server_id, channel_id) VALUES (?, ?)", (ctx.message.guild.id, ctx.message.channel.id))
+        sleepydb.commit()
+        await ctx.send("This channel has been registered as where I'll send pings - please don't force me to!")
+    else:
+        await ctx.send("This server already has a channel linked, sorry.")
+
+
+@sleepingbot.command(pass_context=True)
 async def register(ctx):
     message = remove_prefix("register", ctx.message.content)
     # Prevents the rest from running if message is empty, since this will cause an error with the Geocoding API
@@ -73,10 +84,18 @@ async def register(ctx):
             area_id = await newlocation(name, latlong, ctx)
         else:
             area_id = cached_location[0]
+
         # If user is not already in the database
-        if sleepycursor.execute("SELECT user_id FROM sleep_tracker WHERE user_id = ?", (ctx.author.id,)) is None:
-            sleepycursor.execute("""INSERT INTO sleep_tracker(user_id, area_id)
-                                VALUES (?,?)""", (ctx.author.id, area_id))
+        if sleepycursor.execute("SELECT user_id FROM sleep_tracker WHERE user_id = ?", (ctx.author.id,)).fetchone() is None:
+            server_channel = sleepycursor.execute("SELECT server_id FROM server_linked_channels WHERE server_id = ?",
+                                 (ctx.message.guild.id,)).fetchone()
+            # If the server does not already have a linked channel
+            if server_channel is None:
+                await ctx.send("Sorry, but you'll need to link a channel to use first using the s!link command. I'd recommend a channel used only for bots.")
+                return
+            else:
+                sleepycursor.execute("""INSERT INTO sleep_tracker(user_id, area_id, server_id)
+                                VALUES (?,?,?)""", (ctx.author.id, area_id, server_channel[0]))
         else:
             sleepycursor.execute("UPDATE sleep_tracker SET area_id=? WHERE user_id = ?", (area_id, ctx.author.id))
         sleepydb.commit()
@@ -124,6 +143,7 @@ async def refreshtimezoneoffset():
         sleepydb.commit()
         timetosleep = random.randrange(129, 200)
         await async_sleep(timetosleep)
+
 
 @sleepingbot.command(pass_context=True)
 async def testntp(ctx):
