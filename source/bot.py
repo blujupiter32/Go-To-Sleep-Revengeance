@@ -129,7 +129,7 @@ async def align_to_hour():
 
 async def refreshtimezoneoffset():
     await sleepingbot.wait_until_ready()
-    aligning = False
+    aligning = True
     while aligning is True:
         await align_to_hour()
         aligning = False
