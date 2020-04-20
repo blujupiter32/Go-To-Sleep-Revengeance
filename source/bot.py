@@ -58,10 +58,11 @@ async def link(ctx):
     # If this channel is not registered
     if sleepycursor.execute("SELECT * FROM server_linked_channels WHERE server_id=?", (ctx.message.guild.id,)).fetchone() is None:
         sleepycursor.execute("INSERT INTO server_linked_channels(server_id, channel_id) VALUES (?, ?)", (ctx.message.guild.id, ctx.message.channel.id))
-        sleepydb.commit()
         await ctx.send("This channel has been registered as where I'll send pings - please don't force me to!")
     else:
-        await ctx.send("This server already has a channel linked, sorry.")
+        sleepycursor.execute("UPDATE server_linked_channels SET channel_id=? WHERE server_id=?", (ctx.message.channel.id, ctx.message.guild.id))
+        await ctx.send("Okay, I'll ping here from now on!")
+    sleepydb.commit()
 
 
 @sleepingbot.command(pass_context=True)
