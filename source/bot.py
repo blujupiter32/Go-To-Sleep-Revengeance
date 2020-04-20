@@ -7,8 +7,8 @@ import sqlite3
 import googlemaps
 import ntplib
 import time
+import datetime
 from asyncio import sleep as async_sleep
-import random
 
 gtssetupfiles.checktokenfile()      # Check token file and database to make sure they are in good form
 gtssetupfiles.checkdatabase()
@@ -20,6 +20,7 @@ with open("token.json", "r") as bot_token_file:     # Open token file and read t
 gmaps = googlemaps.Client(google_token)
 ntpclient = ntplib.NTPClient()
 ntpserver = "ntp.plus.net"
+ntpoffset = datetime.datetime.now()
 
 sleepydb = sqlite3.connect("../sleepy.db")
 sleepycursor = sleepydb.cursor()
@@ -81,7 +82,7 @@ async def register(ctx):
         # If this name is not already in the cache:
         cached_location = sleepycursor.execute("SELECT * FROM area_cache WHERE area_name = ?", (name,)).fetchone()
         if cached_location is None:
-            area_id = await newlocation(name, latlong, ctx)
+            area_id = await newlocation(name, latlong)
         else:
             area_id = cached_location[0]
 
@@ -102,9 +103,8 @@ async def register(ctx):
         await ctx.send("You are now registered at "+name)
 
 
-async def newlocation(name, latlong, ctx):
+async def newlocation(name, latlong):
     timezone_info = gmaps.timezone(latlong)
-    await ctx.send(timezone_info)
     timezone_in_database = sleepycursor.execute("SELECT timezone_id FROM timezones WHERE timezone_id=?",
                                                 (timezone_info["timeZoneId"],)).fetchone()
     if timezone_in_database is not None:    # If the timezone in question is already in the database
@@ -122,9 +122,19 @@ async def newlocation(name, latlong, ctx):
 
 async def align_to_hour():
     ntpresponse = ntpclient.request(ntpserver, version=3)
-    ntptime = time.localtime(ntpresponse.tx_time)
-    offsetfromnexthour = ((60 - ntptime.tm_min) - (ntptime.tm_sec / 60)) * 60
+    ntptime = datetime.datetime.utcfromtimestamp(ntpresponse.tx_time)
+    offsetfromnexthour = ((60 - ntptime.minute) - (ntptime.second / 60)) * 60
     await async_sleep(offsetfromnexthour)
+
+
+async def align_to_minute():
+    global ntpoffset
+    ntpresponse = ntpclient.request(ntpserver, version=3)
+    ntptime = datetime.datetime.utcfromtimestamp(ntpresponse.tx_time)
+    now = datetime.datetime.now()
+    ntpoffset = ntptime - now
+    offsetfromnextminute = 60 - ntptime.second
+    await async_sleep(offsetfromnextminute)
 
 
 async def refreshtimezoneoffset():
@@ -141,8 +151,37 @@ async def refreshtimezoneoffset():
             sleepycursor.execute("""UPDATE timezones SET utc_offset=?, dst_offset=? WHERE timezone_id=?""",
                              (new_time["rawOffset"], new_time["dstOffset"], timezone[0]))
         sleepydb.commit()
-        timetosleep = random.randrange(129, 200)
-        await async_sleep(timetosleep)
+        await async_sleep(86400)
+
+
+async def checksleep():
+    await sleepingbot.wait_until_ready()
+    aligining = True
+    while aligining is True:
+        await align_to_minute()
+        aligining = False
+    while aligining is False:
+        user_info = sleepycursor.execute("""SELECT * FROM sleep_tracker
+    JOIN area_cache ac on sleep_tracker.area_id = ac.area_id
+    JOIN timezones t on ac.timezone_id = t.timezone_id
+    JOIN server_linked_channels slc on sleep_tracker.server_id = slc.server_id""").fetchall()
+        for user in user_info:
+            user_id = user[0]
+            utc_offset = user[11]
+            dst_offset = user[10]
+            channel_to_ping = user[13]
+            time_in_timezone = (datetime.datetime.now() + ntpoffset + datetime.timedelta(seconds=utc_offset) + datetime.timedelta(
+                seconds=dst_offset))
+            if time_in_timezone.hour == 0 and time_in_timezone.minute == 0:
+                await go_to_sleep(user_id, channel_to_ping)
+        await async_sleep(60)
+
+
+async def go_to_sleep(user_id, channel_id):
+    user_to_ping = sleepingbot.get_user(user_id)
+    channel_to_ping = sleepingbot.get_channel(channel_id)
+    await channel_to_ping.send(user_to_ping.mention+", it's time to go to sleep.")
+
 
 
 @sleepingbot.command(pass_context=True)
@@ -164,4 +203,5 @@ async def aboutme(ctx):
 My source is at https://github.com/Lewis-Trowbridge/Go-To-Sleep-Revengeance in case you wanted to know more about me.''')
 
 sleepingbot.loop.create_task(refreshtimezoneoffset())
+sleepingbot.loop.create_task(checksleep())
 sleepingbot.run(bot_token)
