@@ -19,7 +19,7 @@ with open("token.json", "r") as bot_token_file:     # Open token file and read t
 
 gmaps = googlemaps.Client(google_token)
 ntpclient = ntplib.NTPClient()
-ntpserver = "ntp.plus.net"
+ntpserver = "time.google.com"
 ntpoffset = datetime.datetime.now()
 
 sleepydb = sqlite3.connect("../sleepy.db")
@@ -71,7 +71,12 @@ async def register(ctx):
     # Prevents the rest from running if message is empty, since this will cause an error with the Geocoding API
     if message != "":
         location_geocode = gmaps.geocode(address=message)
-        latlong = location_geocode[0]["geometry"]["location"]
+        # Filters out any garbage locations or anywhere that Google cannot find
+        try:
+            latlong = location_geocode[0]["geometry"]["location"]
+        except IndexError:
+            await ctx.send("Sorry, there was a problem with finding the exact location for that. Please try another configuration, and if that doesn't work, please contact the owner.")
+            return
         name = ""
         for address in location_geocode[0]["address_components"]:   # Finds the most generic but still useful form of the address given
             if address["types"] == ["administrative_area_level_1", "political"]:
@@ -98,10 +103,11 @@ async def register(ctx):
             else:
                 sleepycursor.execute("""INSERT INTO sleep_tracker(user_id, area_id, server_id)
                                 VALUES (?,?,?)""", (ctx.author.id, area_id, server_channel[0]))
+        # If user is already in the database
         else:
-            sleepycursor.execute("UPDATE sleep_tracker SET area_id=? WHERE user_id = ?", (area_id, ctx.author.id))
+            sleepycursor.execute("UPDATE sleep_tracker SET area_id=?, server_id=? WHERE user_id = ?", (area_id, ctx.message.guild.id, ctx.author.id))
         sleepydb.commit()
-        await ctx.send("You are now registered at "+name)
+        await ctx.send("You are now registered at "+name+". I'll now message you in this server.")
 
 
 async def newlocation(name, latlong):
