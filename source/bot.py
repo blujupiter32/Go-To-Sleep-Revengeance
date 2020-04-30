@@ -12,6 +12,8 @@ from asyncio import sleep as async_sleep
 
 gtssetupfiles.checktokenfile()      # Check token file and database to make sure they are in good form
 gtssetupfiles.checkdatabase()
+gtssetupfiles.checklogdirectory()   # Check log directory to make sure it is there and make it if it is not
+
 with open("token.json", "r") as bot_token_file:     # Open token file and read tokens out of it
     bot_token_json = json.loads(bot_token_file.read())
     bot_token = bot_token_json["botToken"]
@@ -27,7 +29,7 @@ sleepycursor = sleepydb.cursor()
 
 logger = logging.getLogger("discord")
 logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler("gotosleeplog-"+datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")+".txt", "w", "utf-8")
+handler = logging.FileHandler("./logs/gotosleeplog-"+datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")+".txt", "w", "utf-8")
 handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s"))
 logger.addHandler(handler)
 
