@@ -42,7 +42,7 @@ async def on_ready():
     print("My name is " + sleepingbot.user.name)
     print("My ID is " + str(sleepingbot.user.id))
     print("Autobots, roll out")
-    await sleepingbot.change_presence(activity=discord.Game("Oh god I'm alive"))
+    await sleepingbot.change_presence(activity=discord.Game("s!help"))
 
 
 def remove_prefix(command, message):
@@ -51,12 +51,18 @@ def remove_prefix(command, message):
 
 
 @sleepingbot.command(pass_context=True)
-async def sleep(ctx):
-    await ctx.send("Go to sleep")
-
-
-@sleepingbot.command(pass_context=True)
 async def link(ctx):
+
+    """
+    Link a channel - use this one first!
+
+    Links a channel for me to post pings to it's bedtime. I can't send any until you do this, so it's important you do this first.
+
+    Usage: s!link
+    Example:
+        User: s!link
+        Me: This channel has been registered as where I'll send pings - please don't force me to!
+    """
     # If this channel is not registered
     if sleepycursor.execute("SELECT * FROM server_linked_channels WHERE server_id=?", (ctx.message.guild.id,)).fetchone() is None:
         sleepycursor.execute("INSERT INTO server_linked_channels(server_id, channel_id) VALUES (?, ?)", (ctx.message.guild.id, ctx.message.channel.id))
@@ -69,6 +75,20 @@ async def link(ctx):
 
 @sleepingbot.command(pass_context=True)
 async def register(ctx):
+
+    """
+    Register yourself for sleep notifications!
+
+    This one will let you actually see the point in this bot - it will notify you to go to sleep at a suitable time in your timezone.
+
+    You might by rightfully alarmed at the fact that I'm asking you in effect where you live, but don't worry - I don't need much to work out your timezone, and I will make sure to always get the most generic version possible, and I'll tell you what I've found afterwards.
+
+    Usage: s!register [location]
+    Example:
+        User: s!register London
+        Me: You are now registered at England. I'll now message you in this server.
+    """
+
     message = remove_prefix("register", ctx.message.content)
     # Prevents the rest from running if message is empty, since this will cause an error with the Geocoding API
     if message != "":
@@ -192,22 +212,14 @@ async def go_to_sleep(user_id, channel_id):
     await channel_to_ping.send(user_to_ping.mention+", it's time to go to sleep.")
 
 
-
-@sleepingbot.command(pass_context=True)
-async def testntp(ctx):
-    ntpresponse = ntpclient.request("ntp.plus.net", version=3)
-    ntptime = time.localtime(ntpresponse.tx_time)
-    offsetfromnexthour = ((60 - ntptime.tm_min) - (ntptime.tm_sec/60)) * 60
-    await ctx.send("Going into hibernation...")
-    await async_sleep(offsetfromnexthour)
-    ntpresponse = ntpclient.request("ntp.plus.net", version=3)
-    ntptime = time.ctime(ntpresponse.tx_time)
-    await ctx.send(ntptime)
-    await ctx.send("I bet you didn't see me coming!")
-
-
 @sleepingbot.command(pass_context=True)
 async def aboutme(ctx):
+
+    """
+    Tells you all about me
+
+    There's not much to this one - it's just telling you why I'm named like this and where you can find out more.
+    """
     await ctx.send('''Hey! I'm the descendant of an older bot, just called "Go To Sleep", and trust me you don't want to see that
 My source is at https://github.com/Lewis-Trowbridge/Go-To-Sleep-Revengeance in case you wanted to know more about me.''')
 
