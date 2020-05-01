@@ -6,7 +6,6 @@ import json
 import sqlite3
 import googlemaps
 import ntplib
-import time
 import datetime
 from asyncio import sleep as async_sleep
 
