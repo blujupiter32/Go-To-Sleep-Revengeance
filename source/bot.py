@@ -148,6 +148,51 @@ async def newlocation(name, latlong):
     return area_id[0]
 
 
+@sleepingbot.command(pass_context=True)
+async def bedtime(ctx):
+    """
+    Sets a custom bedtime!
+
+    Allows you to decide when you want me to ping you - I'm trusting you to help yourself here, but I understand improving your sleep schedule isn't an instant matter and so should you.
+    At the moment I only support 24-hour format for understanding exactly what time you mean, so please use that.
+
+    Usage: s!bedtime [time]
+
+    Example:
+        User: s!bedtime 1:00
+        Me: Got it! Well done for taking some action!
+    """
+
+    # If the user is already in the database
+    if sleepycursor.execute("SELECT user_id FROM sleep_tracker WHERE user_id=?", (ctx.author.id,)).fetchone() is not None:
+        try:
+            string_bedtime = remove_prefix("bedtime", ctx.message.content)
+            string_hour, string_minutes = str.split(string_bedtime, ":")
+        # Filter out no colon placement
+        except ValueError:
+            await ctx.send("Sorry, something went wrong there. Please try typing that in again - have you placed a colon?")
+            return
+        # Filter out string placements
+        try:
+            hour = int(string_hour)
+            minutes = int(string_minutes)
+        except ValueError:
+            await ctx.send("Sorry, something went wrong there. Silly as it sounds, have you made sure to put both hours and minutes?")
+            return
+        if hour == 24:
+            hour = 0
+        if hour > 24 or minutes > 60:
+            await ctx.send("Sorry, something went wrong there. Are you sure you're using 24-hour time?")
+            return
+        offset = (hour * 3600) + (minutes * 60)
+        sleepycursor.execute("UPDATE sleep_tracker SET bedtime_offset=? WHERE user_id=?", (offset, ctx.author.id))
+        sleepydb.commit()
+        await ctx.send("Okay, that should be all! Well done for taking some action!")
+    else:
+        await ctx.send("Sorry, please register first - then we can get to this part.")
+
+
+
 async def align_to_hour():
     ntpresponse = ntpclient.request(ntpserver, version=3)
     ntptime = datetime.datetime.utcfromtimestamp(ntpresponse.tx_time)
@@ -195,12 +240,16 @@ async def checksleep():
     JOIN server_linked_channels slc on sleep_tracker.server_id = slc.server_id""").fetchall()
         for user in user_info:
             user_id = user[0]
+            bedtime_offset = user[1]
             utc_offset = user[11]
-            dst_offset = user[10]
-            channel_to_ping = user[13]
+            dst_offset = user[12]
+            channel_to_ping = user[14]
             time_in_timezone = (datetime.datetime.now() + ntpoffset + datetime.timedelta(seconds=utc_offset) + datetime.timedelta(
                 seconds=dst_offset))
-            if time_in_timezone.hour == 0 and time_in_timezone.minute == 0:
+            bedtime_float = bedtime_offset / 3600
+            bedtime_hours = int(bedtime_float)
+            bedtime_minutes = round((bedtime_float - bedtime_hours) * 60)
+            if time_in_timezone.hour == bedtime_hours and time_in_timezone.minute == bedtime_minutes:
                 await go_to_sleep(user_id, channel_to_ping)
         await async_sleep(60)
 
@@ -209,6 +258,7 @@ async def go_to_sleep(user_id, channel_id):
     user_to_ping = sleepingbot.get_user(user_id)
     channel_to_ping = sleepingbot.get_channel(channel_id)
     await channel_to_ping.send(user_to_ping.mention+", it's time to go to sleep.")
+
 
 
 @sleepingbot.command(pass_context=True)
