@@ -109,7 +109,7 @@ async def register(ctx):
         # If this name is not already in the cache:
         cached_location = sleepycursor.execute("SELECT * FROM area_cache WHERE area_name = ?", (name,)).fetchone()
         if cached_location is None:
-            area_id = await newlocation(name, latlong)
+            area_id = await new_location(name, latlong)
         else:
             area_id = cached_location[0]
 
@@ -131,7 +131,7 @@ async def register(ctx):
         await ctx.send("You are now registered at "+name+". I'll now message you in this server.")
 
 
-async def newlocation(name, latlong):
+async def new_location(name, latlong):
     timezone_info = gmaps.timezone(latlong)
     timezone_in_database = sleepycursor.execute("SELECT timezone_id FROM timezones WHERE timezone_id=?",
                                                 (timezone_info["timeZoneId"],)).fetchone()
@@ -192,7 +192,6 @@ async def bedtime(ctx):
         await ctx.send("Sorry, please register first - then we can get to this part.")
 
 
-
 async def align_to_hour():
     ntpresponse = ntpclient.request(ntpserver, version=3)
     ntptime = datetime.datetime.utcfromtimestamp(ntpresponse.tx_time)
@@ -210,7 +209,7 @@ async def align_to_minute():
     await async_sleep(offsetfromnextminute)
 
 
-async def refreshtimezoneoffset():
+async def refresh_timezone_offset():
     await sleepingbot.wait_until_ready()
     aligning = True
     while aligning is True:
@@ -227,13 +226,13 @@ async def refreshtimezoneoffset():
         await async_sleep(86400)
 
 
-async def checksleep():
+async def check_sleep():
     await sleepingbot.wait_until_ready()
-    aligining = True
-    while aligining is True:
+    aligning = True
+    while aligning is True:
         await align_to_minute()
-        aligining = False
-    while aligining is False:
+        aligning = False
+    while aligning is False:
         user_info = sleepycursor.execute("""SELECT * FROM sleep_tracker
     JOIN area_cache ac on sleep_tracker.area_id = ac.area_id
     JOIN timezones t on ac.timezone_id = t.timezone_id
@@ -260,7 +259,6 @@ async def go_to_sleep(user_id, channel_id):
     await channel_to_ping.send(user_to_ping.mention+", it's time to go to sleep.")
 
 
-
 @sleepingbot.command(pass_context=True)
 async def aboutme(ctx):
 
@@ -272,6 +270,6 @@ async def aboutme(ctx):
     await ctx.send('''Hey! I'm the descendant of an older bot, just called "Go To Sleep", and trust me you don't want to see that
 My source is at https://github.com/Lewis-Trowbridge/Go-To-Sleep-Revengeance in case you wanted to know more about me.''')
 
-sleepingbot.loop.create_task(refreshtimezoneoffset())
-sleepingbot.loop.create_task(checksleep())
+sleepingbot.loop.create_task(refresh_timezone_offset())
+sleepingbot.loop.create_task(check_sleep())
 sleepingbot.run(bot_token)
