@@ -239,7 +239,7 @@ async def check_sleep():
     JOIN server_linked_channels slc on sleep_tracker.server_id = slc.server_id""").fetchall()
         for user in user_info:
             user_id = user[0]
-            bedtime_offset = user[1]
+            bedtime_offset = user[3]
             utc_offset = user[11]
             dst_offset = user[12]
             channel_to_ping = user[14]
