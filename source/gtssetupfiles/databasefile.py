@@ -11,9 +11,9 @@ def checkdatabase():
     if new_file is True:
         cursor.execute("""CREATE TABLE sleep_tracker (
             user_id INTEGER PRIMARY KEY,
-            bedtime_offset INTEGER DEFAULT 0,
             area_id INTEGER,
             server_id INTEGER,
+            bedtime_offset INTEGER DEFAULT 0,
             FOREIGN KEY (area_id) REFERENCES area_cache(area_id),
             FOREIGN KEY (server_id) REFERENCES server_linked_channels(server_id)
             );""")
@@ -47,6 +47,6 @@ def checkdatabase():
 
 def check_bedtime_table(cursor):
     columns = cursor.execute("""PRAGMA table_info(sleep_tracker)""").fetchall()
-    if columns[1][1] != "bedtime_offset":
+    if columns[3][1] != "bedtime_offset":
         cursor.execute("""ALTER TABLE sleep_tracker ADD
         bedtime_offset INTEGER DEFAULT 0""")
