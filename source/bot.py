@@ -233,16 +233,16 @@ async def check_sleep():
         await align_to_minute()
         aligning = False
     while aligning is False:
-        user_info = sleepycursor.execute("""SELECT * FROM sleep_tracker
+        user_info = sleepycursor.execute("""SELECT user_id, bedtime_offset, t.utc_offset, t.dst_offset, slc.channel_id FROM sleep_tracker
     JOIN area_cache ac on sleep_tracker.area_id = ac.area_id
     JOIN timezones t on ac.timezone_id = t.timezone_id
-    JOIN server_linked_channels slc on sleep_tracker.server_id = slc.server_id""").fetchall()
+    JOIN server_linked_channels slc on sleep_tracker.server_id = slc.server_id;""").fetchall()
         for user in user_info:
             user_id = user[0]
-            bedtime_offset = user[3]
-            utc_offset = user[11]
-            dst_offset = user[12]
-            channel_to_ping = user[14]
+            bedtime_offset = user[1]
+            utc_offset = user[2]
+            dst_offset = user[3]
+            channel_to_ping = user[4]
             time_in_timezone = (datetime.datetime.now() + ntpoffset + datetime.timedelta(seconds=utc_offset) + datetime.timedelta(
                 seconds=dst_offset))
             bedtime_float = bedtime_offset / 3600
