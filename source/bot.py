@@ -94,6 +94,7 @@ async def register(ctx):
         location_geocode = gmaps.geocode(address=message)
         # Filters out any garbage locations or anywhere that Google cannot find
         try:
+
             latlong = location_geocode[0]["geometry"]["location"]
         except IndexError:
             await ctx.send("Sorry, there was a problem with finding the exact location for that. Please try another configuration, and if that doesn't work, please contact the owner.")
@@ -115,15 +116,15 @@ async def register(ctx):
 
         # If user is not already in the database
         if sleepycursor.execute("SELECT user_id FROM sleep_tracker WHERE user_id = ?", (ctx.author.id,)).fetchone() is None:
-            server_channel = sleepycursor.execute("SELECT server_id FROM server_linked_channels WHERE server_id = ?",
+            server_id = sleepycursor.execute("SELECT server_id FROM server_linked_channels WHERE server_id = ?",
                                  (ctx.message.guild.id,)).fetchone()
             # If the server does not already have a linked channel
-            if server_channel is None:
+            if server_id is None:
                 await ctx.send("Sorry, but you'll need to link a channel to use first using the s!link command. I'd recommend a channel used only for bots.")
                 return
             else:
                 sleepycursor.execute("""INSERT INTO sleep_tracker(user_id, area_id, server_id)
-                                VALUES (?,?,?)""", (ctx.author.id, area_id, server_channel[0]))
+                                VALUES (?,?,?)""", (ctx.author.id, area_id, server_id[0]))
         # If user is already in the database
         else:
             sleepycursor.execute("UPDATE sleep_tracker SET area_id=?, server_id=? WHERE user_id = ?", (area_id, ctx.message.guild.id, ctx.author.id))
@@ -255,30 +256,54 @@ async def check_sleep():
         await align_to_minute()
         aligning = False
     while aligning is False:
-        user_info = sleepycursor.execute("""SELECT user_id, bedtime_offset, t.utc_offset, t.dst_offset, slc.channel_id FROM sleep_tracker
+        current_server_id = 0
+        current_server_members = []
+        current_channel_to_ping = 0
+        user_info = sleepycursor.execute("""SELECT user_id, sleep_tracker.server_id, bedtime_offset, t.utc_offset, t.dst_offset, slc.channel_id FROM sleep_tracker
     JOIN area_cache ac on sleep_tracker.area_id = ac.area_id
     JOIN timezones t on ac.timezone_id = t.timezone_id
-    JOIN server_linked_channels slc on sleep_tracker.server_id = slc.server_id;""").fetchall()
+    JOIN server_linked_channels slc on sleep_tracker.server_id = slc.server_id
+    ORDER BY sleep_tracker.server_id;""").fetchall()
         for user in user_info:
             user_id = user[0]
-            bedtime_offset = user[1]
-            utc_offset = user[2]
-            dst_offset = user[3]
-            channel_to_ping = user[4]
+            server_id = user[1]
+            bedtime_offset = user[2]
+            utc_offset = user[3]
+            dst_offset = user[4]
+            channel_to_ping = user[5]
+            if server_id != current_server_id:
+                await go_to_sleep(current_server_members, current_channel_to_ping)
+                current_server_id = server_id
+                current_server_members = []
+                current_channel_to_ping = channel_to_ping
+                current_server = sleepingbot.get_guild(current_server_id)
+
             time_in_timezone = (datetime.datetime.now() + ntpoffset + datetime.timedelta(seconds=utc_offset) + datetime.timedelta(
                 seconds=dst_offset))
             bedtime_float = bedtime_offset / 3600
             bedtime_hours = int(bedtime_float)
             bedtime_minutes = round((bedtime_float - bedtime_hours) * 60)
             if time_in_timezone.hour == bedtime_hours and time_in_timezone.minute == bedtime_minutes:
-                await go_to_sleep(user_id, channel_to_ping)
+                current_member = current_server.get_member(user_id)
+                current_server_members.append(current_member)
+        await go_to_sleep(current_server_members, current_channel_to_ping)
         await async_sleep(60)
 
 
-async def go_to_sleep(user_id, channel_id):
-    user_to_ping = sleepingbot.get_user(user_id)
-    channel_to_ping = sleepingbot.get_channel(channel_id)
-    await channel_to_ping.send(user_to_ping.mention+", it's time to go to sleep.")
+async def go_to_sleep(members_to_ping, channel_id):
+    if len(members_to_ping) != 0:   # If there are more than 0 members to ping, start counting through them - filters out the empty starting list
+        sleep_time_string = ""
+        well_done_string = ""
+        channel_to_ping = sleepingbot.get_channel(channel_id)
+        for user_to_ping in members_to_ping:
+            if user_to_ping.status == discord.Status.online:    # If the user is online, add them to the list to be told to go to sleep.
+                sleep_time_string += user_to_ping.mention + ", "
+            else:   # If the user is not online, add them to the list to be congratulated for going to sleep.
+                well_done_string += user_to_ping.name + ", "
+        if len(sleep_time_string) != 0:     # If there are any users that have to go to sleep, send the message.
+            await channel_to_ping.send(sleep_time_string + "it's time to go to sleep.")
+        if len(well_done_string) != 0:      # If there are any users that are asleep, send the message.
+            await channel_to_ping.send(well_done_string + "well done. It's good to see you're taking your health seriously. I'm proud of you!")
 
 
 @sleepingbot.command(pass_context=True)
