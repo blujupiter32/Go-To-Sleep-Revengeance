@@ -149,6 +149,28 @@ async def new_location(name, latlong):
 
 
 @sleepingbot.command(pass_context=True)
+async def unregister(ctx):
+
+    """
+    Unregisters you for sleep notifications
+
+    As simple as it sounds - this lets you delete yourself from my list if you feel like you don't want notifications.
+
+    Usage: s!unregister
+
+    Example:
+        User: s!unregister
+        Me: Okay, all done!
+    """
+    if sleepycursor.execute("SELECT user_id FROM sleep_tracker WHERE user_id = ?", (ctx.author.id,)).fetchone() is not None:
+        sleepycursor.execute("DELETE FROM sleep_tracker WHERE user_id = ?", (ctx.author.id,))
+        sleepydb.commit()
+        await ctx.send("Okay, all done!")
+    else:
+        await ctx.send("Sorry, I can't find you - are you sure you're registered?")
+
+
+@sleepingbot.command(pass_context=True)
 async def bedtime(ctx):
     """
     Sets a custom bedtime!
