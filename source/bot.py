@@ -204,7 +204,7 @@ async def bedtime(ctx):
             return
         if hour == 24:
             hour = 0
-        if hour > 24 or minutes > 60:
+        if hour > 24 or hour < 0 or minutes > 60 or minutes < 0:
             await ctx.send("Sorry, something went wrong there. Are you sure you're using 24-hour time?")
             return
         offset = (hour * 3600) + (minutes * 60)
@@ -259,24 +259,36 @@ async def check_sleep():
         current_server_id = 0
         current_server_members = []
         current_channel_to_ping = 0
+        lost_server_id = 0
         user_info = sleepycursor.execute("""SELECT user_id, sleep_tracker.server_id, bedtime_offset, t.utc_offset, t.dst_offset, slc.channel_id FROM sleep_tracker
     JOIN area_cache ac on sleep_tracker.area_id = ac.area_id
     JOIN timezones t on ac.timezone_id = t.timezone_id
     JOIN server_linked_channels slc on sleep_tracker.server_id = slc.server_id
     ORDER BY sleep_tracker.server_id;""").fetchall()
         for user in user_info:
-            user_id = user[0]
             server_id = user[1]
+            if server_id == lost_server_id:
+                continue
+            user_id = user[0]
             bedtime_offset = user[2]
             utc_offset = user[3]
             dst_offset = user[4]
             channel_to_ping = user[5]
+            # If we've entered the range of users from a different server from the one we're looking at
             if server_id != current_server_id:
+                # Fire off the messages to users from the old server
                 await go_to_sleep(current_server_members, current_channel_to_ping)
-                current_server_id = server_id
-                current_server_members = []
-                current_channel_to_ping = channel_to_ping
+                current_server_id = server_id   # Aim at the new server
+                # Get a new guild object for the desired server to get member objects from
                 current_server = sleepingbot.get_guild(current_server_id)
+                current_server_members = []     # Clear out the members already gathered
+                current_channel_to_ping = channel_to_ping
+                if current_server is None:      # If for some reason we cannot access a server, for example we've been kicked, delete all data about it
+                    sleepycursor.execute("DELETE FROM sleep_tracker WHERE server_id = ? ", (current_server_id,))    # Delete user data for users from that server, critical for privacy and ethical reasons
+                    sleepycursor.execute("DELETE FROM server_linked_channels WHERE server_id = ?", (current_server_id,))    # Delete server data, more to save space than privacy
+                    sleepydb.commit()
+                    lost_server_id = current_server_id
+                    continue
 
             time_in_timezone = (datetime.datetime.now() + ntpoffset + datetime.timedelta(seconds=utc_offset) + datetime.timedelta(
                 seconds=dst_offset))
@@ -304,6 +316,8 @@ async def go_to_sleep(members_to_ping, channel_id):
             await channel_to_ping.send(sleep_time_string + "it's time to go to sleep.")
         if len(well_done_string) != 0:      # If there are any users that are asleep, send the message.
             await channel_to_ping.send(well_done_string + "well done. It's good to see you're taking your health seriously. I'm proud of you!")
+    else:
+        return
 
 
 @sleepingbot.command(pass_context=True)
