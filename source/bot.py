@@ -12,11 +12,16 @@ from asyncio import sleep as async_sleep
 gtssetupfiles.checktokenfile()      # Check token file and database to make sure they are in good form
 gtssetupfiles.checkdatabase()
 gtssetupfiles.checklogdirectory()   # Check log directory to make sure it is there and make it if it is not
+gtssetupfiles.checksupportserver()  # Check support server invite to make sure it is there and make it if it is not
 
 with open("token.json", "r") as bot_token_file:     # Open token file and read tokens out of it
     bot_token_json = json.loads(bot_token_file.read())
     bot_token = bot_token_json["botToken"]
     google_token = bot_token_json["googleToken"]
+
+with open("supportserver.json", "r") as support_server_file:
+    support_server_json = json.loads(support_server_file.read())
+    support_server_invite = support_server_json["supportServerInvite"]
 
 gmaps = googlemaps.Client(google_token)
 ntpclient = ntplib.NTPClient()
@@ -80,9 +85,10 @@ async def register(ctx):
 
     This one will let you actually see the point in this bot - it will notify you to go to sleep at a suitable time in your timezone.
 
-    You might by rightfully alarmed at the fact that I'm asking you in effect where you live, but don't worry - I don't need much to work out your timezone, and I will make sure to always get the most generic version possible, and I'll tell you what I've found afterwards.
+    You might be rightfully alarmed at the fact that I'm asking you in effect where you live, but don't worry - I don't need much to work out your timezone, and I will make sure to always get the most generic version possible, and I'll tell you what I've found afterwards.
 
     Usage: s!register [location]
+    
     Example:
         User: s!register London
         Me: You are now registered at England. I'll now message you in this server.
@@ -318,6 +324,20 @@ async def go_to_sleep(members_to_ping, channel_id):
             await channel_to_ping.send(well_done_string + "well done. It's good to see you're taking your health seriously. I'm proud of you!")
     else:
         return
+
+
+@sleepingbot.command(pass_context=True)
+async def support(ctx):
+
+    """
+    Gives you the link for the support server
+
+    If there's a problem you can't solve, go here to the support server! Try to give as much detail as possible please, as that will make it easier to solve
+    """
+    if support_server_invite != "":
+        await ctx.send("Here's the invite: "+support_server_invite)
+    else:
+        await ctx.send("Sorry, there doesn't seem to be a support server in this implementation of the bot - this may be a clone of the original source code without one.")
 
 
 @sleepingbot.command(pass_context=True)
