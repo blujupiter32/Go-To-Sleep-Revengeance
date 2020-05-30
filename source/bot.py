@@ -273,13 +273,15 @@ async def check_sleep():
     ORDER BY sleep_tracker.server_id;""").fetchall()
         for user in user_info:
             server_id = user[1]
-            if server_id == lost_server_id:
+            if server_id == lost_server_id:     # If on this run we've removed a server ID, this will skip the remaining users who belong in that server
                 continue
+            channel_to_ping = user[5]
+            if channel_to_ping is None:     # If the user is part of a server with a problematic channel, this will skip them until the channel is corrected
+                continue                    # Since we only check if a channel is valid once every query, there is no need to track the ID, as the none value will be there the next time
             user_id = user[0]
             bedtime_offset = user[2]
             utc_offset = user[3]
             dst_offset = user[4]
-            channel_to_ping = user[5]
             # If we've entered the range of users from a different server from the one we're looking at
             if server_id != current_server_id:
                 # Fire off the messages to users from the old server
@@ -303,7 +305,11 @@ async def check_sleep():
             bedtime_minutes = round((bedtime_float - bedtime_hours) * 60)
             if time_in_timezone.hour == bedtime_hours and time_in_timezone.minute == bedtime_minutes:
                 current_member = current_server.get_member(user_id)
-                current_server_members.append(current_member)
+                if current_member is not None:
+                    current_server_members.append(current_member)
+                else:   # If the user is none, that means they are inaccessible for some reason, and to err on the side of caution we remove them from the database
+                    sleepycursor.execute("DELETE FROM sleep_tracker WHERE user_id=?", (user_id,))
+                    sleepydb.commit()
         await go_to_sleep(current_server_members, current_channel_to_ping)
         await async_sleep(60)
 
@@ -313,15 +319,22 @@ async def go_to_sleep(members_to_ping, channel_id):
         sleep_time_string = ""
         well_done_string = ""
         channel_to_ping = sleepingbot.get_channel(channel_id)
-        for user_to_ping in members_to_ping:
-            if user_to_ping.status == discord.Status.online:    # If the user is online, add them to the list to be told to go to sleep.
-                sleep_time_string += user_to_ping.mention + ", "
-            else:   # If the user is not online, add them to the list to be congratulated for going to sleep.
-                well_done_string += user_to_ping.name + ", "
-        if len(sleep_time_string) != 0:     # If there are any users that have to go to sleep, send the message.
-            await channel_to_ping.send(sleep_time_string + "it's time to go to sleep.")
-        if len(well_done_string) != 0:      # If there are any users that are asleep, send the message.
-            await channel_to_ping.send(well_done_string + "well done. It's good to see you're taking your health seriously. I'm proud of you!")
+        if channel_to_ping is not None:
+            for user_to_ping in members_to_ping:
+                if user_to_ping.status == discord.Status.online:    # If the user is online, add them to the list to be told to go to sleep.
+                    sleep_time_string += user_to_ping.mention + ", "
+                else:   # If the user is not online, add them to the list to be congratulated for going to sleep.
+                    well_done_string += user_to_ping.name + ", "
+            try:
+                if len(sleep_time_string) != 0:     # If there are any users that have to go to sleep, send the message.
+                    await channel_to_ping.send(sleep_time_string + "it's time to go to sleep.")
+                if len(well_done_string) != 0:      # If there are any users that are asleep, send the message.
+                    await channel_to_ping.send(well_done_string + "well done. It's good to see you're taking your health seriously. I'm proud of you!")
+            except discord.Forbidden:   # If we get a forbidden error, this may mean we do not have permissions, so we should null out the channel until things are fixed
+                sleepycursor.execute("UPDATE server_linked_channels SET channel_id=? WHERE channel_id=?", (None, channel_id))
+                sleepydb.commit()
+        else:   # If the channel is not accessible, it may have been deleted, so we should null it out
+            sleepycursor.execute("UPDATE server_linked_channels SET channel_id=? WHERE channel_id=?", (None, channel_id))
     else:
         return
 
